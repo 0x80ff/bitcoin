@@ -8,11 +8,7 @@ A node should never send anything other than VERSION/VERACK/REJECT until it's
 received a VERACK.
 
 This test connects to a node and sends it a few messages, trying to intice it
-into sending us something it shouldn't.
-
-Also test that nodes that send unsupported service bits to bitcoind are disconnected
-and don't receive a VERACK. Unsupported service bits are currently 1 << 5 and
-1 << 7 (until August 1st 2018)."""
+into sending us something it shouldn't."""
 
 from test_framework.mininode import *
 from test_framework.test_framework import BitcoinTestFramework
@@ -97,21 +93,15 @@ class P2PLeakTest(BitcoinTestFramework):
         self.extra_args = [['-banscore='+str(banscore)]]
 
     def run_test(self):
-        self.nodes[0].setmocktime(1501545600)  # August 1st 2017
-
         no_version_bannode = self.nodes[0].add_p2p_connection(CNodeNoVersionBan(), send_version=False)
         no_version_idlenode = self.nodes[0].add_p2p_connection(CNodeNoVersionIdle(), send_version=False)
         no_verack_idlenode = self.nodes[0].add_p2p_connection(CNodeNoVerackIdle())
-        unsupported_service_bit5_node = self.nodes[0].add_p2p_connection(CLazyNode(), services=NODE_NETWORK|NODE_UNSUPPORTED_SERVICE_BIT_5)
-        unsupported_service_bit7_node = self.nodes[0].add_p2p_connection(CLazyNode(), services=NODE_NETWORK|NODE_UNSUPPORTED_SERVICE_BIT_7)
 
         NetworkThread().start()  # Start up network handling in another thread
 
         wait_until(lambda: no_version_bannode.ever_connected, timeout=10, lock=mininode_lock)
         wait_until(lambda: no_version_idlenode.ever_connected, timeout=10, lock=mininode_lock)
         wait_until(lambda: no_verack_idlenode.version_received, timeout=10, lock=mininode_lock)
-        wait_until(lambda: unsupported_service_bit5_node.ever_connected, timeout=10, lock=mininode_lock)
-        wait_until(lambda: unsupported_service_bit7_node.ever_connected, timeout=10, lock=mininode_lock)
 
         # Mine a block and make sure that it's not sent to the connected nodes
         self.nodes[0].generate(1)
@@ -122,11 +112,7 @@ class P2PLeakTest(BitcoinTestFramework):
         #This node should have been banned
         assert not no_version_bannode.connected
 
-        # These nodes should have been disconnected
-        assert not unsupported_service_bit5_node.connected
-        assert not unsupported_service_bit7_node.connected
-
-        for _ in range(5):
+        for _ in range(len(self.nodes[0].p2ps)):
             self.nodes[0].disconnect_p2p()
 
         # Wait until all connections are closed
@@ -136,19 +122,6 @@ class P2PLeakTest(BitcoinTestFramework):
         assert(no_version_bannode.unexpected_msg == False)
         assert(no_version_idlenode.unexpected_msg == False)
         assert(no_verack_idlenode.unexpected_msg == False)
-        assert not unsupported_service_bit5_node.unexpected_msg
-        assert not unsupported_service_bit7_node.unexpected_msg
-
-        self.log.info("Service bits 5 and 7 are allowed after August 1st 2018")
-        self.nodes[0].setmocktime(1533168000)  # August 2nd 2018
-
-        allowed_service_bit5_node = self.nodes[0].add_p2p_connection(NodeConnCB(), services=NODE_NETWORK|NODE_UNSUPPORTED_SERVICE_BIT_5)
-        allowed_service_bit7_node = self.nodes[0].add_p2p_connection(NodeConnCB(), services=NODE_NETWORK|NODE_UNSUPPORTED_SERVICE_BIT_7)
-
-        NetworkThread().start()  # Network thread stopped when all previous NodeConnCBs disconnected. Restart it
-
-        wait_until(lambda: allowed_service_bit5_node.message_count["verack"], lock=mininode_lock)
-        wait_until(lambda: allowed_service_bit7_node.message_count["verack"], lock=mininode_lock)
 
 if __name__ == '__main__':
     P2PLeakTest().main()
