@@ -182,13 +182,15 @@ class TestNode():
         assert self.p2ps, "No p2p connection"
         return self.p2ps[0]
 
-    def disconnect_p2p(self, index=0):
-        """Close the p2p connection to the node."""
-        # Connection could have already been closed by other end. Calling disconnect_p2p()
-        # on an already disconnected p2p connection is not an error.
-        if self.p2ps[index].connection is not None:
-            self.p2ps[index].connection.disconnect_node()
-        del self.p2ps[index]
+    def disconnect_p2ps(self):
+        """Close all p2p connections to the node."""
+        for _ in range(len(self.p2ps)):
+            index = 0
+            # Connection could have already been closed by other end.
+            if self.p2ps[index].connection is not None:
+                self.p2ps[index].connection.disconnect_node()
+            del self.p2ps[index]
+
 
 class TestNodeCLI():
     """Interface to bitcoin-cli for an individual node"""
